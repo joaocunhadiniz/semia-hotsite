@@ -337,9 +337,16 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           ctx.fillRect(0, 0, W, H)
         }
 
-        // time-based visStep — no scroll, only elapsed time
+        // time-based visStep — loops: grow for GROWTH_MS then restart
         const elapsed = Date.now() - mountTimeRef.current
         const rawStep = elapsed * MAX_STEPS / GROWTH_MS * growthSpeedRef.current
+        // when cycle ends, reset so controls stay responsive and canvas stays alive
+        if (rawStep >= MAX_STEPS + 14) {
+          mountTimeRef.current = Date.now()
+          prevStepRef.current = -1
+          rafRef.current = requestAnimationFrame(draw)
+          return
+        }
         const visStep = rawStep
 
         if (visStep <= prevStepRef.current) {
