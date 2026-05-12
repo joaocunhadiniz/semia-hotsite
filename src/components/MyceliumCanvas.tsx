@@ -24,7 +24,7 @@ const KILL_R        = 14
 const SEG_LEN       = 7
 const MAX_STEPS     = 560
 const MAX_NODES     = 3600
-const GROWTH_MS     = 20_000   // 20s to reach full network
+const GROWTH_MS     = 600_000  // 10min to reach full network
 const NET_LIFESPAN  = 28_000
 const MAX_NET_SEGS  = 50_000
 const GRID_SIZE     = 200
@@ -129,6 +129,22 @@ function buildSpaceColonization(W: number, H: number, attractorCount = 320): SCN
   return nodes
 }
 
+function drawBaseLayer(ctx: CanvasRenderingContext2D, nodes: SCNode[], hue: number) {
+  const h = (33 + hue + 360) % 360
+  ctx.save()
+  ctx.strokeStyle = `hsla(${h},37%,38%,0.10)`
+  ctx.lineWidth = 0.9
+  ctx.beginPath()
+  for (const node of nodes) {
+    if (node.parent === null) continue
+    const parent = nodes[node.parent]
+    ctx.moveTo(parent.pos.x, parent.pos.y)
+    ctx.lineTo(node.pos.x, node.pos.y)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
 // ─── component ───────────────────────────────────────────────────
 
 export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, lineScale, opacity, dissolution, hue, entropy, coverage }: Props) {
@@ -178,6 +194,7 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
       nodesRef.current = buildSpaceColonization(canvas.width, canvas.height, coverageRef.current)
       mountTimeRef.current = Date.now()
       prevStepRef.current = -1
+      drawBaseLayer(ctx, nodesRef.current, hueRef.current)
     }, 100)
   }, [coverage])
 
@@ -205,7 +222,6 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         }, 125)
       })
       .catch(() => {
-        // build local SC after layout settles
         setTimeout(() => {
           if (simBuilt.current) return
           simBuilt.current = true
@@ -214,6 +230,8 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           nodesRef.current = buildSpaceColonization(W, H, coverageRef.current)
           mountTimeRef.current = Date.now()
           prevStepRef.current = -1
+          const canvas = canvasRef.current
+          if (canvas) drawBaseLayer(canvas.getContext('2d')!, nodesRef.current, hueRef.current)
         }, 600)
       })
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
@@ -238,6 +256,7 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           nodesRef.current = buildSpaceColonization(canvas.width, canvas.height, coverageRef.current)
           mountTimeRef.current = Date.now()
           prevStepRef.current = -1
+          drawBaseLayer(ctx, nodesRef.current, hueRef.current)
         }, 200)
       }
     }
