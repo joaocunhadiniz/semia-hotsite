@@ -40,11 +40,6 @@ function mulberry32(seed: number) {
 }
 function dist2(a: Vec2, b: Vec2) { const dx = a.x-b.x, dy = a.y-b.y; return dx*dx+dy*dy }
 function norm(v: Vec2): Vec2 { const l = Math.sqrt(v.x*v.x+v.y*v.y)||1; return {x:v.x/l, y:v.y/l} }
-function inZone(x: number, y: number, zones: {x:number;y:number;w:number;h:number}[], pad: number) {
-  for (const z of zones)
-    if (x>=z.x-pad && x<=z.x+z.w+pad && y>=z.y-pad && y<=z.y+z.h+pad) return true
-  return false
-}
 
 // node hash for stagger jitter so segments don't appear as blocks
 function nodeHash(pos: Vec2): number {
