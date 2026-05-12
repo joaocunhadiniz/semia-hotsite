@@ -342,7 +342,8 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         ctx.clearRect(0, 0, W, H)
 
         const baseAlpha = 0.50 + decay * 0.38
-        const fadeRate  = 0.008 * dissolutionRef.current
+        // segments persist ~1.2× the full cycle at dissolution=1
+        const fadeRate  = (1 / (MAX_STEPS * 1.2)) * dissolutionRef.current
 
         for (const node of nodes) {
           if (node.parent === null) continue
