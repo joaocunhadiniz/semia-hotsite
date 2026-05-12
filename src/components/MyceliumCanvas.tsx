@@ -326,53 +326,43 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         batch(old,   0.18 + decay*0.18, 0.7)
 
       } else {
-        // ── local SC: persistent canvas, time-driven growth ────
+        // ── local SC: stateless per-frame draw ─────────────────
+        // Redraws all visible nodes every frame so controls react instantly
         const nodes = nodesRef.current
         if (!nodes.length) { rafRef.current = requestAnimationFrame(draw); return }
 
-        // gentle fade every 3 frames — speed controlled by dissolution
-        if (frameRef.current % 3 === 0) {
-          const fadeAlpha = Math.min(0.08, 0.005 * dissolutionRef.current)
-          ctx.fillStyle = `rgba(245,243,238,${fadeAlpha})`
-          ctx.fillRect(0, 0, W, H)
-        }
-
-        // time-based visStep — loops: grow for GROWTH_MS then restart
         const elapsed = Date.now() - mountTimeRef.current
         const rawStep = elapsed * MAX_STEPS / GROWTH_MS * growthSpeedRef.current
-        // when cycle ends, reset so controls stay responsive and canvas stays alive
         if (rawStep >= MAX_STEPS + 14) {
           mountTimeRef.current = Date.now()
-          prevStepRef.current = -1
-          rafRef.current = requestAnimationFrame(draw)
-          return
-        }
-        const visStep = rawStep
-
-        if (visStep <= prevStepRef.current) {
           rafRef.current = requestAnimationFrame(draw)
           return
         }
 
-        // paint only NEWLY revealed segments this frame
+        ctx.clearRect(0, 0, W, H)
+
         const baseAlpha = 0.50 + decay * 0.38
+        const fadeRate  = 0.008 * dissolutionRef.current
+
         for (const node of nodes) {
           if (node.parent === null) continue
-          // per-node stagger: jitter up to 14 steps based on position hash
-          const jitter = nodeHash(node.pos) * 14
+          const jitter        = nodeHash(node.pos) * 14
           const effectiveStep = node.step + jitter
-          if (effectiveStep > visStep || effectiveStep <= prevStepRef.current) continue
+          if (effectiveStep > rawStep) continue
 
-          const parent = nodes[node.parent]
+          const age      = rawStep - effectiveStep
+          const ageAlpha = Math.max(0, 1 - age * fadeRate)
+          if (ageAlpha < 0.005) continue
+
+          const parent    = nodes[node.parent]
           const depthFade = Math.max(0.18, 1 - node.step / MAX_STEPS)
-          const alpha = Math.min(1, baseAlpha * depthFade * opacityRef.current)
-          const lw = Math.max(0.4, (2.8 - node.step * 0.003) * (1 + decay * 0.5) * lineScaleRef.current)
-          const h = (33 + hueRef.current + 360) % 360
-
-          // entropy: bake random wobble into the segment when first drawn
-          const e = entropyRef.current
-          const wx = e > 0 ? (Math.random() - 0.5) * e * 5 : 0
-          const wy = e > 0 ? (Math.random() - 0.5) * e * 5 : 0
+          const alpha     = Math.min(1, baseAlpha * depthFade * opacityRef.current * ageAlpha)
+          const lw        = Math.max(0.4, (2.8 - node.step * 0.003) * (1 + decay * 0.5) * lineScaleRef.current)
+          const h         = (33 + hueRef.current + 360) % 360
+          // deterministic wobble per node using node.age as seed
+          const e  = entropyRef.current
+          const wx = e > 0 ? (node.age - 0.5) * e * 5 : 0
+          const wy = e > 0 ? ((node.age * 7.3321) % 1 - 0.5) * e * 5 : 0
 
           ctx.beginPath()
           ctx.moveTo(parent.pos.x, parent.pos.y)
@@ -381,8 +371,6 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           ctx.lineWidth = lw
           ctx.stroke()
         }
-
-        prevStepRef.current = visStep
       }
 
       rafRef.current = requestAnimationFrame(draw)
