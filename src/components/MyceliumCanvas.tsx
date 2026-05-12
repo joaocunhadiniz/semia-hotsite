@@ -153,15 +153,20 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
   const hueRef           = useRef(hue)
   const entropyRef       = useRef(entropy)
   const coverageRef      = useRef(coverage)
+  // signals a full redraw of revealed segments with current params
+  const redrawSignalRef  = useRef(0)
+  const lastRedrawRef    = useRef(0)
 
   useEffect(() => { decayRef.current       = decayLevel  }, [decayLevel])
   useEffect(() => { psiRef.current         = psilocybin  }, [psilocybin])
   useEffect(() => { growthSpeedRef.current = growthSpeed }, [growthSpeed])
-  useEffect(() => { lineScaleRef.current   = lineScale   }, [lineScale])
-  useEffect(() => { opacityRef.current     = opacity     }, [opacity])
   useEffect(() => { dissolutionRef.current = dissolution }, [dissolution])
-  useEffect(() => { hueRef.current         = hue         }, [hue])
-  useEffect(() => { entropyRef.current     = entropy     }, [entropy])
+
+  // visual params: update ref AND signal instant redraw
+  useEffect(() => { lineScaleRef.current = lineScale; redrawSignalRef.current++ }, [lineScale])
+  useEffect(() => { opacityRef.current   = opacity;   redrawSignalRef.current++ }, [opacity])
+  useEffect(() => { hueRef.current       = hue;       redrawSignalRef.current++ }, [hue])
+  useEffect(() => { entropyRef.current   = entropy;   redrawSignalRef.current++ }, [entropy])
 
   // rebuild SC when coverage changes (local mode only)
   useEffect(() => {
@@ -326,45 +331,75 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         batch(old,   0.18 + decay*0.18, 0.7)
 
       } else {
-        // ── local SC: stateless per-frame draw ─────────────────
-        // Redraws all visible nodes every frame so controls react instantly
+        // ── local SC: persistent canvas + instant redraw on param change ──
         const nodes = nodesRef.current
         if (!nodes.length) { rafRef.current = requestAnimationFrame(draw); return }
 
+        // When visual params change: clear + redraw all revealed segments immediately
+        if (redrawSignalRef.current !== lastRedrawRef.current) {
+          lastRedrawRef.current = redrawSignalRef.current
+          ctx.clearRect(0, 0, W, H)
+          const snapStep = prevStepRef.current < 0 ? 0 : prevStepRef.current
+          const baseA = 0.50 + decay * 0.38
+          const h0 = (33 + hueRef.current + 360) % 360
+          for (const node of nodes) {
+            if (node.parent === null) continue
+            const jitter = nodeHash(node.pos) * 14
+            const eff = node.step + jitter
+            if (eff > snapStep) continue
+            const parent    = nodes[node.parent]
+            const depthFade = Math.max(0.18, 1 - node.step / MAX_STEPS)
+            const alpha     = Math.min(1, baseA * depthFade * opacityRef.current)
+            const lw        = Math.max(0.4, (2.8 - node.step * 0.003) * (1 + decay * 0.5) * lineScaleRef.current)
+            const e  = entropyRef.current
+            const wx = e > 0 ? (node.age - 0.5) * e * 5 : 0
+            const wy = e > 0 ? ((node.age * 7.3321) % 1 - 0.5) * e * 5 : 0
+            ctx.beginPath()
+            ctx.moveTo(parent.pos.x, parent.pos.y)
+            ctx.lineTo(node.pos.x + wx, node.pos.y + wy)
+            ctx.strokeStyle = `hsla(${h0},37%,40%,${alpha.toFixed(3)})`
+            ctx.lineWidth = lw
+            ctx.stroke()
+          }
+        }
+
+        // gentle fade — speed controlled by dissolution
+        if (frameRef.current % 3 === 0) {
+          const fadeAlpha = Math.min(0.08, 0.005 * dissolutionRef.current)
+          ctx.fillStyle = `rgba(245,243,238,${fadeAlpha})`
+          ctx.fillRect(0, 0, W, H)
+        }
+
+        // time-based growth, loops after full cycle
         const elapsed = Date.now() - mountTimeRef.current
         const rawStep = elapsed * MAX_STEPS / GROWTH_MS * growthSpeedRef.current
         if (rawStep >= MAX_STEPS + 14) {
           mountTimeRef.current = Date.now()
+          prevStepRef.current = -1
+          rafRef.current = requestAnimationFrame(draw)
+          return
+        }
+        const visStep = rawStep
+        if (visStep <= prevStepRef.current) {
           rafRef.current = requestAnimationFrame(draw)
           return
         }
 
-        ctx.clearRect(0, 0, W, H)
-
+        // paint only NEWLY revealed segments this frame
         const baseAlpha = 0.50 + decay * 0.38
-        // segments persist ~1.2× the full cycle at dissolution=1
-        const fadeRate  = (1 / (MAX_STEPS * 1.2)) * dissolutionRef.current
-
+        const h = (33 + hueRef.current + 360) % 360
         for (const node of nodes) {
           if (node.parent === null) continue
           const jitter        = nodeHash(node.pos) * 14
           const effectiveStep = node.step + jitter
-          if (effectiveStep > rawStep) continue
-
-          const age      = rawStep - effectiveStep
-          const ageAlpha = Math.max(0, 1 - age * fadeRate)
-          if (ageAlpha < 0.005) continue
-
+          if (effectiveStep > visStep || effectiveStep <= prevStepRef.current) continue
           const parent    = nodes[node.parent]
           const depthFade = Math.max(0.18, 1 - node.step / MAX_STEPS)
-          const alpha     = Math.min(1, baseAlpha * depthFade * opacityRef.current * ageAlpha)
+          const alpha     = Math.min(1, baseAlpha * depthFade * opacityRef.current)
           const lw        = Math.max(0.4, (2.8 - node.step * 0.003) * (1 + decay * 0.5) * lineScaleRef.current)
-          const h         = (33 + hueRef.current + 360) % 360
-          // deterministic wobble per node using node.age as seed
           const e  = entropyRef.current
           const wx = e > 0 ? (node.age - 0.5) * e * 5 : 0
           const wy = e > 0 ? ((node.age * 7.3321) % 1 - 0.5) * e * 5 : 0
-
           ctx.beginPath()
           ctx.moveTo(parent.pos.x, parent.pos.y)
           ctx.lineTo(node.pos.x + wx, node.pos.y + wy)
@@ -372,6 +407,7 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           ctx.lineWidth = lw
           ctx.stroke()
         }
+        prevStepRef.current = visStep
       }
 
       rafRef.current = requestAnimationFrame(draw)
