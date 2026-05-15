@@ -155,6 +155,7 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
   const coverageRef      = useRef(coverage)
   const redrawSignalRef  = useRef(0)
   const lastRedrawRef    = useRef(0)
+  const fullDrawRef      = useRef(false)
 
   useEffect(() => { decayRef.current       = decayLevel  }, [decayLevel])
   useEffect(() => { psiRef.current         = psilocybin  }, [psilocybin])
@@ -251,9 +252,9 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           if (simBuilt.current) return
           simBuilt.current = true
           nodesRef.current = buildSpaceColonization(canvas.width, canvas.height, coverageRef.current)
-          const isLocalhost = window.location.hostname === 'localhost'
-          mountTimeRef.current = isLocalhost ? Date.now() : Date.now() - GROWTH_MS * 1.1
+            mountTimeRef.current = Date.now()
           prevStepRef.current = -1
+          if (window.location.hostname !== 'localhost') fullDrawRef.current = true
         }, 200)
       }
     }
@@ -345,6 +346,33 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         // ── local SC: persistent canvas, time-driven growth ────
         const nodes = nodesRef.current
         if (!nodes.length) { rafRef.current = requestAnimationFrame(draw); return }
+
+        // non-localhost: draw the complete network in one burst on first frame
+        if (fullDrawRef.current) {
+          fullDrawRef.current = false
+          ctx.clearRect(0, 0, W, H)
+          const baseA = 0.50 + decay * 0.38
+          const h0 = (33 + hueRef.current + 360) % 360
+          for (const node of nodes) {
+            if (node.parent === null) continue
+            const parent    = nodes[node.parent]
+            const depthFade = Math.max(0.18, 1 - node.step / MAX_STEPS)
+            const alpha     = Math.min(1, baseA * depthFade * opacityRef.current)
+            const lw        = Math.max(0.4, (2.8 - node.step * 0.003) * lineScaleRef.current)
+            const e = entropyRef.current
+            const wx = e > 0 ? (node.age - 0.5) * e * 5 : 0
+            const wy = e > 0 ? ((node.age * 7.3321) % 1 - 0.5) * e * 5 : 0
+            ctx.beginPath()
+            ctx.moveTo(parent.pos.x, parent.pos.y)
+            ctx.lineTo(node.pos.x + wx, node.pos.y + wy)
+            ctx.strokeStyle = `hsla(${h0},37%,40%,${alpha.toFixed(3)})`
+            ctx.lineWidth = lw
+            ctx.stroke()
+          }
+          prevStepRef.current = MAX_STEPS + 100
+          rafRef.current = requestAnimationFrame(draw)
+          return
+        }
 
         // param changed: clear + redraw all revealed segments instantly
         if (redrawSignalRef.current !== lastRedrawRef.current) {
