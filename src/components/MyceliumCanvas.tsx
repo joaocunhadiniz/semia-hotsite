@@ -192,7 +192,7 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         const W = window.innerWidth
         const H = window.innerHeight
         nodesRef.current = buildSpaceColonization(W, H, coverageRef.current)
-        mountTimeRef.current = Date.now()
+        mountTimeRef.current = Date.now() - GROWTH_MS * 0.5
         prevStepRef.current = -1
       }, 600)
       return
