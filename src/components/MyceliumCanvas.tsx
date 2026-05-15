@@ -251,7 +251,8 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
           if (simBuilt.current) return
           simBuilt.current = true
           nodesRef.current = buildSpaceColonization(canvas.width, canvas.height, coverageRef.current)
-          mountTimeRef.current = Date.now()
+          const isLocalhost = window.location.hostname === 'localhost'
+          mountTimeRef.current = isLocalhost ? Date.now() : Date.now() - GROWTH_MS * 1.1
           prevStepRef.current = -1
         }, 200)
       }
