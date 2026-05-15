@@ -183,8 +183,20 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
     }, 100)
   }, [coverage])
 
-  // ── probe mycorust, else build local SC ──────────────────────
+  // ── probe mycorust (only on localhost), else build local SC ──
   useEffect(() => {
+    if (window.location.hostname !== 'localhost') {
+      setTimeout(() => {
+        if (simBuilt.current) return
+        simBuilt.current = true
+        const W = window.innerWidth
+        const H = window.innerHeight
+        nodesRef.current = buildSpaceColonization(W, H, coverageRef.current)
+        mountTimeRef.current = Date.now()
+        prevStepRef.current = -1
+      }, 600)
+      return
+    }
     fetch(`${MYCO_API}/stats`, { signal: AbortSignal.timeout(1500) })
       .then(() => {
         modeRef.current = 'mycorust'
