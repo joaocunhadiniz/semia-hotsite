@@ -24,7 +24,7 @@ const KILL_R        = 14
 const SEG_LEN       = 7
 const MAX_STEPS     = 560
 const MAX_NODES     = 3600
-const GROWTH_MS     = window.location.hostname === 'localhost' ? 300_000 : 15_000
+const GROWTH_MS     = 300_000
 const NET_LIFESPAN  = 28_000
 const MAX_NET_SEGS  = 50_000
 const GRID_SIZE     = 200
@@ -192,7 +192,8 @@ export default function MyceliumCanvas({ decayLevel, psilocybin, growthSpeed, li
         const W = window.innerWidth
         const H = window.innerHeight
         nodesRef.current = buildSpaceColonization(W, H, coverageRef.current)
-        mountTimeRef.current = Date.now()
+        // offset past full cycle so first frame draws the complete network
+        mountTimeRef.current = Date.now() - GROWTH_MS * 1.1
         prevStepRef.current = -1
       }, 600)
       return
